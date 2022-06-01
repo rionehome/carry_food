@@ -18,8 +18,8 @@ class Movement():
         self.camera_data.far_near = 2
         self.theta = 0.0  #rotate_theta
         self.go_back = 0.0    #moveOn_distance
-        self.move_theta = 0.0  #linear_x's value
-        self.move_on = 0.0     #augular_z's value
+        self.move_theta = 0.0  #augular_z's value
+        self.move_on = 0.0     #linear_x's value
 
     def move(self):
         target_time = 0.05

@@ -44,7 +44,7 @@ class CarryFood():
         else:
             self.stop = 0
         
-        if self.stop == 10 *23:  #keeped 2 minutes
+        if self.stop == 10 *2:  #keeped 2 minutes
             self.move_permission = 0
         
         return 0
