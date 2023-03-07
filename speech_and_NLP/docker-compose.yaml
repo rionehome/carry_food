@@ -1,0 +1,10 @@
+
+version: '3'
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python3 src/main.py
+    devices:
+      - /dev/snd:/dev/snd  

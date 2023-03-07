@@ -12,6 +12,19 @@ add_message_files(
 	PositionValues.msg
 )
 
+add_service_files(
+  FILES
+  isMeaning.srv
+  MoveArm.srv
+  SpeechToText.srv
+)
+
+add_service_files(
+  FILES
+  Camera_msg.srv
+  MoveArm.srv
+)
+
 generate_messages(
 	DEPENDENCIES
 	std_msgs

@@ -1,0 +1,6 @@
+int16 x
+int16 y
+int16 deg
+int16 grip
+---
+int16 res

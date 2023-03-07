@@ -1,115 +1,37 @@
-#!/usr/bin/env python
-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import rospy
 from std_msgs.msg import String
-import os
-from pocketsphinx import LiveSpeech
+from carry_my_luggage.srv import SpeechToText, isMeaning
+
 import sys
-sys.dont_write_bytecode = True
-sys.path.append('/home/ri-one/catkin_ws/src/carry_food/audio_src/')
-from module import module_pico
-from module import module_beep
+import os
 
-oa_dict = {}  #order and answer
-with open('/home/ri-one/catkin_ws/src/carry_food/audio_src/carry_food.txt', 'r') as f:
-    oa_list = f.readlines()
-    #print("----------order list-----------")
-    for oa in oa_list:
-        oa = oa.rstrip().split(',')
-        oa_dict[str.lower(oa[0])] = oa[1]
-        #print(str.lower(oa[0]))
-    #print("----------order list-----------\n")
-# Define path
-file_path = os.path.abspath(__file__)
-dic_path = file_path.replace(
-    '/audio.py', '/audio_src/carry_food.dict')
-gram_path = file_path.replace(
-    '/audio.py', '/audio_src/carry_food.gram')
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+# 音声認識の関数 (vosk)
+from speech_and_NLP.src.tools.speech_to_text.speechToText import recognize_speech 
+from speech_and_NLP.src.tools.speech_to_text.isMeaning import is_meaning
+from speech_and_NLP.src.tools.text_to_speech.textToSpeech import textToSpeech
 
-live_speech = LiveSpeech(lm=False, dic=dic_path, jsgf=gram_path, kws_threshold=1e-20)
-
-class OandA():
+class Audio():
     def __init__(self):
-        self.pub = rospy.Publisher('/audio_finish', String, queue_size = 1)
-        self.sub = rospy.Subscriber('/audio_start', String, self.cb)
+        self.sub = rospy.Subscriber("/audio", String, self.callback)
+        self.speechToTextSrv = rospy.Service("/speechToText", SpeechToText, self.calbkSTT)
+        self.isMeaningSrv = rospy.Service("/isMeaning", isMeaning, self.calbkIsMeaning)
 
-    def recognition(self):
+    def calbkIsMeaning(self, msg):
+        return is_meaning(msg.text, msg.word_list, msg.path)
 
-        ###############
-        #
-        # test pocketsphinx with dictionary
-        #
-        # param >> None
-        #
-        # return >> None
-        #
-        ###############
-
-        global live_speech
-        print('[*] START RECOGNITION')
-
-        module_beep.beep()
-        for phrase in live_speech:
-            noise_words = self.read_noise_word(gram_path)
-            if str(phrase) == "":
-                pass
-            elif str(phrase) not in noise_words:
-                return str(phrase)
-
-            # noise
-            else:
-                #print(".*._noise_.*.")
-                pass
-
-    def read_noise_word(self, gram_path):
-
-        ###############
-        #
-        # use this module to put noise to list
-        #
-        # param >> gram_path: grammer's path which you want to read noises
-        #
-        # return >> words: list in noises
-        #
-        ###############
-
-        words = []
-        with open(gram_path) as f:
-            for line in f.readlines():
-                if "<noise>" not in line:
-                    continue
-                if "<rule>" in line:
-                    continue
-                line = line.replace("<noise>", "").replace(
-                        " = ", "").replace("\n", "").replace(";", "")
-                words = line.split(" | ")
-        return words
-
-    def main(self, message):
-        while True:
-            order = self.recognition()
-            print("recognition: ", order)
-            if (message == "carry" and order == "carry food") or \
-                (message == "stand-by" and order == "i received the food"):
-                self.pub.publish("ok")
-                break
-            print("----------------------------------")
-        
-        module_pico.speak(oa_dict[order])
-        print("----------listening fin----------")
-
-    def cb(self, message):
-        if message.data == "carry" or message.data == "stand-by":
-            self.pub.publish("ryo")
-            self.main(message.data)
+    def calbkSTT(self, msg):
+        return recognize_speech(msg.print_partial, msg.use_break, msg.return_extract_person_name, msg.remove_space, msg.voskLogLevel, msg.path)
+    
+    def callback(self, msg):
+        textToSpeech(msg.data, verbose=True)
 
 if __name__ == '__main__':
-    rospy.init_node('audio')
-    OrderAndAnswer = OandA()
-    rate = rospy.Rate(10)
+    rospy.init_node("audio")
+    audio = Audio()
+    
     while not rospy.is_shutdown():
-        try:
-            rate.sleep()
-        except:
-            sys.exit()
+        rospy.Rate(10).sleep()

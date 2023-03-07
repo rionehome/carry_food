@@ -1,0 +1,12 @@
+autocorrect
+unidic 
+vosk
+sounddevice
+mecab-python3
+pygame --pre
+mutagen
+gTTS==2.2.3
+pyopenjtalk
+pydub
+scipy
+
