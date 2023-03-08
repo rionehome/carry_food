@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(carry_food)
+project(carry_food_v2)
 
 find_package(catkin REQUIRED COMPONENTS
 	rospy

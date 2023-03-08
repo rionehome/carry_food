@@ -1,182 +1,196 @@
-#!/usr/bin/env python
-# coding: utf-8
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-import sys
+import os
+import time
 import cv2
+from PIL import Image
 import numpy as np
 import rospy
-from carry_food.msg import PositionValues
-import time
+import matplotlib.pyplot as plt
+from facenet_pytorch import InceptionResnetV1
+from facenet_pytorch import MTCNN
+from carry_food_v2.msg import PositionValues
+from collections.abc import Mapping
+from std_msgs.msg import String
 
-class CamFaceDict():
+
+class capface():
 
     def __init__(self):
-        self.a = 0
-        self.pub = rospy.Publisher('/RLDict', PositionValues, queue_size=1) #左右の向きを保持する
-        self.position = PositionValues()
-        self.position.up_down = 0
-        self.position.left_right = 1
-        self.position.far_near = 2
-        self.change_value = [1, 0, 2]
-        self.change_time_1 = time.time()
-        self.change_time_2 = time.time()
+        """
+        ノードの作成
+        出版者の作成
+        """
+        rospy.init_node("face")
+        self.face_pub = rospy.Publisher("/face", PositionValues, queue_size=1)
+        self.audio_pub = rospy.Publisher("/audio", String, queue_size=1)
+        #elf.a = 0
 
-    def FaceShow(self, FaceCascade, FaceImg):
-    
-        #capture = cv2.VideoCapture(0)
-        Wpos = 1 #0:左、1:中央、2:右
-        Hpos = 0 #0:上、1:中央、2:右
-        Dpos = 4 #0:遠い、1:もうちょい、2:良い、3:近すぎる、4:検出なし
-        self.change_value[0] = Wpos
-        self.change_value[1] = Hpos
-        self.change_value[2] = Dpos
+        # self.face_pub = 0
 
-        FaceWHDpos = np.zeros(3)
+        print("初期化")
 
-        # カスケード分類器のxmlファイルを取得する。
-        face_cascade_path = FaceCascade
-    
-        # カスケード分類器を作成 
-        face_cascade = cv2.CascadeClassifier(face_cascade_path) 
 
-        # グレースケール化 
-        Img_gray = cv2.cvtColor(FaceImg, cv2.COLOR_BGR2GRAY) 
+    #1つ目の関数
+    def get_face(self):
 
-        # cv2で開くため不要
-        # 出力結果用にコピー & RGB化 
-        #Img = cv2.cvtColor(Img, cv2.COLOR_BGR2RGB) 
-        #囲む色 
-        color = (0, 255, 0) 
-        #顔を検知 
-    
-        faces = face_cascade.detectMultiScale(Img_gray) 
-    
-        height, width, channels = FaceImg.shape[:3] #配列の成分を取得
+        mtcnn = MTCNN() #MTCNNモデルを取得する
+        # カメラの読込み
+        # 内蔵カメラがある場合、下記引数の数字を変更する必要あり
+        cam_num = 0
+        try:
+            cap = cv2.VideoCapture(cam_num)
+        except:
+            cam_num += 1
 
-        for (x,y,w,h) in faces: 
-        # 検知した顔を矩形で囲む 
-            cv2.rectangle(FaceImg,(x,y),(x+w,y+h),(255,0,0),2) 
-            roi_color = FaceImg[y:y+h, x:x+w] 
-            #print("顔は (" + str(x) + "," + str(y) + ") と " + "(" + str(x+w) + "," + str(y+h) + ") にある。")
+        num = 0 #撮影枚数を保持する変数
 
-            #顔が左右のいずれに映るか
-            if x + w / 2 < width * 2 / 5:
-                #print("顔が右にあるが反転し左に映る。")
-                Wpos = 2
+        #print(self.a)
 
-            elif x + w / 2 < width * 3 / 5 and x + w / 2 >= width * 2 / 5:
-                #print("顔が左右中央にある。")
-                Wpos = 1
 
-            elif x + w / 2 < width * 5 / 5:
-                #print("顔が左にあるが反転し右に映る。")
-                Wpos = 0
-            
-            else:
-                Wpos = 1
 
-            #顔が上下のいずれに映るか
-            if y + h / 2 < height * (3 / 2) / 3:
-                #print("顔が上にある。")
-                Hpos = 0
+        left_ave = 0 #平均値
+        up_ave = 0
+        right_ave = 0
+        down_ave = 0
 
-            elif y + h / 2 < height * 2 / 3 and y + h / 2 >= height * (3 / 2) / 3:
-                #print("顔が上下中央にある。")
-                Hpos = 1
+        frame_count = 0 #一度だけフレームの大きさを取得するため
 
-            else:
-                #print("顔が下にある。")
-                Hpos = 2
+        ##ロボットから見た
+        robo_face_dis = 0  #顔の距離
+        robo_face_drct = 0 #顔の方向
+        robo_face_hgt = 0  #顔の高さ
 
-            #顔が遠近のいずれに映るか
-            if (w < 80) or (h < 80):
-                Dpos = 0 #遠いとき速くしようと思ったけど、料理を運ぶために速度変化は無い方が良いかなと思ったため1と0で速度変化はなし。
+        # 動画終了 かつ 最大枚数を超えるまで まで、1フレームずつ読み込んで表示する。
+        while(cap.isOpened()):
 
-            elif (w >= 80 and w < 150) or (h >= 80 and h < 150):
-                Dpos = 1 
+            ret, frame = cap.read()# 1フレーム毎　読込み
+
+           
+
+            # OpenCVでも入力できる
+            # 顔領域、顔っぽさ、特徴点のリストを取得、顔が1つなら長さ1
+            boxes, probs, points = mtcnn.detect(frame, landmarks=True)
+            #print(boxes)        
+
+            if boxes is not None:
+                #imageCropped = mtcnn(image) # MTCNNで顔検出、切り取った160x160の画像を保存
+                #int(boxes[0][0]), int(boxes[0][1])), (int(boxes[0][2]), int(boxes[0][3])
+                #切り出し範囲＝img[縦方向（上）：縦方向（下）, 横方向（左）：横方向（右）]
+                #左下、右上
+                #dtcimage =cv2.rectangle(frame, (int(boxes[0][0]), int(boxes[0][1])), (int(boxes[0][2]), int(boxes[0][3])), color=(255, 0, 0), thickness=2)
+                #cut_frame = frame[int(boxes[0][1]):int(boxes[0][3]), int(boxes[0][0]):int(boxes[0][2])] 
+
+                #1回だけフレームの大きさを取得する
+                if frame_count == 0:
+                    frame_h, frame_w, _ = frame.shape
+                    frame_count = 1
+
+                #リストに値を追加し、幅、高さ、中心座標の平滑化を行う
+                left = [] 
+                up = []
+                right = []
+                down = []
+               
+                
+                for i in range(20):
+                    left.append(boxes[0][0])
+                    up.append(boxes[0][1])
+                    right.append(boxes[0][2])
+                    down.append(boxes[0][3])
+
+                    left_ave = int(sum(left)/len(left)) #平均値
+                    up_ave = int(sum(up)/len(up))
+                    right_ave = int(sum(right)/len(right))
+                    down_ave = int(sum(down)/len(down))
+
+
+
+                #time.sleep(WAIT_TIME) #顔が見つかったら1秒待つ
+                cv2.rectangle(frame, (left_ave, up_ave), (right_ave, down_ave), (255, 0, 0))
+                #cv2.imwrite(FOLDER + "/" + IMG + str(num) +  ".png", frame)
+
+                #顔の矩形の幅
+                w = int(right_ave - left_ave)
+                h = int(down_ave - up_ave)
+
+                #顔の矩形の位置
+                c_x = int((right_ave + left_ave)/2)
+                c_y = int((down_ave + up_ave)/2)
+
+
+
+                #ロボットと顔との距離
+                if w < frame_w/5:
+                    robo_face_dis = 0
+
+                elif w >= frame_w/5 and w <= frame_w/3:
+                    robo_face_dis = 1
+
+                elif w > frame_w/3:
+                    robo_face_dis = 2
+
+
+
+                #ロボットから見た顔の方向　
+                if c_x < frame_h/3:
+                    robo_face_drct = 0
+
+                elif c_x >= frame_w/3 and c_x <= frame_w*2/3:
+                    robo_face_drct = 1
+
+                elif c_x > frame_w*2/3:
+                    robo_face_drct = 2
+
+
+
+                #ロボットから見た顔の高さ
+                if c_y < frame_h/3:
+                    robo_face_hgt = 0
+
+                elif c_y >= frame_h/3 and c_y <= frame_h*2/3:
+                    robo_face_hgt = 1
+
+                elif c_y > frame_h*2/3:
+                    robo_face_hgt = 2
+
         
-            elif (w >= 150 and w < 230) or (h >= 150 and h < 230):
-                Dpos = 2
+            print("robo_face_dis=" + str(robo_face_dis))
+            print("robo_face_drct=" + str(robo_face_drct))
+            print("robo_face_hgt=" + str(robo_face_hgt))
 
-            elif (w >= 230) or (h >= 230):
-                Dpos = 3
             
-            else:
-                Dpos = 4
+            """
+            顔との距離、方向、高さを出版する
+            """   
 
-            #print("幅は、" + str(w) + "で 高さは" + str(h) + "です。")
+            p = PositionValues()
+            p.up_down = robo_face_hgt
+            p.far_near = robo_face_dis
+            p.left_right = robo_face_drct
 
-        FaceWHDpos[0] = Hpos #0番目の要素が上下の位置を保持
-        FaceWHDpos[1] = Wpos #1番目の要素が左右の位置を保持
-        FaceWHDpos[2] = Dpos #2番目の要素が遠近の位置を保持
+            self.face_pub.publish(p)
+             
+            
+            
+            cv2.imshow('face_dtc' , frame)
 
-        #一瞬消える青枠の情報を整備（調整中で汚いコードです）
-        self.change_time_1 = time.time()
-        if (self.change_value[0] != FaceWHDpos[0]) or \
-           (self.change_value[1] != FaceWHDpos[1]) or \
-           (self.change_value[2] != FaceWHDpos[2]):
-            self.change_time_2 = time.time()
-            while (self.change_time_2 - self.change_time_1 <= 0.05):
-                self.change_time_2 = time.time()        
-
-        self.change_value[0] = FaceWHDpos[0]
-        self.change_value[1] = FaceWHDpos[1]
-        self.change_value[2] = FaceWHDpos[2]
-
-        self.position.up_down = FaceWHDpos[0]
-        self.position.left_right = FaceWHDpos[1]
-        self.position.far_near = FaceWHDpos[2]
-
-        self.pub.publish(self.position)
-
-        return FaceWHDpos
-
-
-    #ResizedImg = cv2.resize(FaceImg, (int(width/4), int(height/4))) #画像、横、縦　Img.shapeと順番が逆転
-
-    #def Show(self):
-    #    height, width, channels = frame.shape[:3] #配列の成分を取得
-    #    print("画面の大きさは、高さが" + str(height) + "で、幅が" + str(width) + "です。")
-
-
-if __name__ == '__main__':
-
-    print(sys.version)
-
-    #ノードの初期化
-    rospy.init_node("Camera") #ノードの初期化
-
-    #ビデオキャプチャーオブジェクトを取得
-    capture = cv2.VideoCapture(-1) #カメラの設定
-    ret, frame = capture.read()
-
-    if ret:
-        print("カメラを使うことができます。")
-        
-        height, width, channels = frame.shape[:3] #配列の成分を取得
-        #print("画面の大きさは、高さが" + str(height) + "で、幅が" + str(width) + "です。")
-
-        CMSD = CamFaceDict() #クラスの実体化
-   
-        #顔検出関数の繰り返しの実行
-        while(True):
-            ret, frame = capture.read(0)
-
-            FacePos = np.zeros(3)
-
-            FacePos = CMSD.FaceShow("/home/ri-one/catkin_ws/src/carry_food/haarcascade_frontalface_alt.xml", frame)
-            #FacePos = CMSD.FaceShow("/home/rione/Rione/catkin_ws/src/spr-16TEST/haarcascade_frontalface_alt.xml", frame)
-            print("上下は" + str(FacePos[0]) + "左右は" + str(FacePos[1]) + "遠近は" + str(FacePos[2]))
-
-            cv2.imshow('frame',frame)
-   
-
+            # qキーが押されたら途中終了
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
-        capture.release() 
-        cv2.destroyAllWindows() #終了後windowsを閉じる
+        # 終了処理
+        cap.release()
+        cv2.destroyAllWindows()
 
-    else:
-        print("カメラを使うことができません。")
+
+ 
+
+if __name__ == "__main__":
+    cp = capface()
+    cp.get_face()
+    # インスタンス生成
+    #human1 = Human()
     
+    #uman1.printinfo()

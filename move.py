@@ -3,7 +3,7 @@
 import rospy
 from std_msgs.msg import String
 from geometry_msgs.msg import Twist
-from carry_food.msg import PositionValues
+from carry_food_v2.msg import PositionValues
 import time
 
 class Movement():

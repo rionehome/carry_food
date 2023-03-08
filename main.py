@@ -3,8 +3,10 @@
 import rospy
 import sys
 from std_msgs.msg import String
-from carry_food.msg import PositionValues
+from carry_food_v2.msg import PositionValues
 import time
+from carry_food_v2.srv import SpeechToText
+
 
 class CarryFood():
     def __init__(self):
@@ -14,15 +16,21 @@ class CarryFood():
         self.stop = 0   #move stop counter
         self.move_permission = 0  #move permission 0 = False, 1 = True
         self.move_turn = 0  #turn 180 angul
+        self.audio_pub = rospy.Publisher('/audio', String, queue_size=1)
+
 
         #audio
-        self.audio_pub = rospy.Publisher('/audio_start', String, queue_size = 1, latch = True)  #to /audio
+        self.audio_pub = rospy.Publisher('/audio', String, queue_size = 1)  #to /audio
         self.audio_sub = rospy.Subscriber('/audio_finish', String, self.control_audio)  #from /audio
         self.audio_finish = 0  #0 = False, 1 = True
-    
+        self.speechToText = rospy.ServiceProxy("/speechToText", SpeechToText )
+
+        #rospy.waitforservice(/speechToText)
+        #self.speechToText(True,3,False, True, -1)
     def control_audio(self, message):
         if message.data == "ryo":    #audio accept
             self.audio_pub.publish("wait")
+            
         if message.data == "ok":
             self.audio_finish = 1
         return 0
@@ -31,7 +39,7 @@ class CarryFood():
         if self.move_permission == 0:
             return 0
         
-        if self.move_turn == 1:   #turn 180 angul
+        if self.move_turn == 1:   #turn 180 angle
             message.up_down = 180
             self.move_pub.publish(message)
             self.move_turn = 0
@@ -44,20 +52,24 @@ class CarryFood():
         else:
             self.stop = 0
         
-        if self.stop == 10 *2:  #keeped 2 minutes
+        if self.stop == 10 *2:  #kept 2 minutes
             self.move_permission = 0
         
         return 0
 
     def main(self):
+        self.audio_pub.publish("hello")
+        rospy.wait_for_service("/speechToText")
+        text = self.speechToText(True, 4, False, True, -1, "")
+        print(text.res)
         rate = rospy.Rate(10)
         time.sleep(3)
 
         #audio start listening to the word, "carry food"
         self.audio_finish = 0
         self.audio_pub.publish("carry")
-        while self.audio_finish == 0:
-            rate.sleep()
+        # while self.audio_finish == 0:
+        #     rate.sleep()
         self.audio_finish = 0
 
         #turn_180

@@ -1,0 +1,10 @@
+<launch>
+	 <include file="$(find turtlebot_bringup)/launch/minimal.launch"/>
+
+    <group ns="food">
+	<node pkg="carry_food_v2" name="audio" type="audio.py" output="screen" />
+	<node pkg="carry_food_v2" name="Camera" type="CamFace.py" output="screen" />
+	<node pkg="carry_food_v2" name="move_operation" type="move.py" output="screen"/>
+	<node pkg="carry_food_v2" name="main" type="main.py" output="screen" />
+    </group>
+</launch>

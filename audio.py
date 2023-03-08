@@ -3,7 +3,7 @@
 
 import rospy
 from std_msgs.msg import String
-from carry_my_luggage.srv import SpeechToText, isMeaning
+from carry_food_v2.srv import SpeechToText, isMeaning
 
 import sys
 import os
